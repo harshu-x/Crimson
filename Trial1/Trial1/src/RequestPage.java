@@ -1,15 +1,10 @@
-
 import javax.swing.*;
 import javax.swing.table.*;
 import java.awt.*;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.Statement;
+import java.sql.*;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
-import net.proteanit.sql.DbUtils;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
@@ -38,6 +33,7 @@ public class RequestPage extends JFrame {
         shadow.setFont(new Font("serif", Font.PLAIN, 60));
         shadow.setForeground(Color.PINK);
         add(shadow);
+
         Timer headingTimer = new Timer(20, new ActionListener() {
             int x = heading.getX();
 
@@ -67,34 +63,43 @@ public class RequestPage extends JFrame {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
             Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/login_erp", "root", "");
-
             Statement st = con.createStatement();
-
-            // Initial query to load all complaints
             String initialQuery = "SELECT * FROM Complaints";
             ResultSet rs = st.executeQuery(initialQuery);
-            model = (DefaultTableModel) DbUtils.resultSetToTableModel(rs);
 
-            table.setModel(model);
+            // Populate table using ResultSet directly
+            ResultSetMetaData rsmd = rs.getMetaData();
+            int columnCount = rsmd.getColumnCount();
 
-            JTableHeader header = table.getTableHeader();
-            header.setDefaultRenderer(new CustomHeaderRenderer());
+            // Set up table columns
+            for (int i = 1; i <= columnCount; i++) {
+                model.addColumn(rsmd.getColumnName(i));
+            }
 
+            // Add rows from the result set
+            while (rs.next()) {
+                Object[] row = new Object[columnCount];
+                for (int i = 1; i <= columnCount; i++) {
+                    row[i - 1] = rs.getObject(i);
+                }
+                model.addRow(row);
+            }
+
+            // Center align the table cells
             DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
             centerRenderer.setHorizontalAlignment(JLabel.CENTER);
-            int columnCount = table.getColumnCount();
             int columnWidth = 1550 / columnCount;
-            for (int i = 0; i < table.getColumnCount(); i++) {
+            for (int i = 0; i < columnCount; i++) {
                 table.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
                 table.getColumnModel().getColumn(i).setPreferredWidth(columnWidth);
             }
 
             table.setRowHeight(30);
+
         } catch (Exception e) {
             e.printStackTrace();
         }
 
-      
         nameSearchField = new JTextField();
         nameSearchField.setBounds(1100, 100, 200, 30);
         add(nameSearchField);
@@ -116,25 +121,24 @@ public class RequestPage extends JFrame {
                 nameSorter.setRowFilter(RowFilter.regexFilter("(?i)" + searchTerm, 2)); // 2 represents the third column (Name)
             }
         });
+
         backButton = new JButton("<");
         backButton.setBounds(10, 10, 80, 30);
         backButton.setForeground(Color.BLACK);
-        backButton.setBackground(new Color(230,230,250));
+        backButton.setBackground(new Color(230, 230, 250));
         backButton.setBorderPainted(false);
         add(backButton);
 
-
         backButton.addActionListener(new ActionListener() {
-          
             public void actionPerformed(ActionEvent e) {
-                dispose(); 
-                new AdminOptions(); 
+                dispose();
+                new AdminOptions();
             }
         });
+
         JButton viewLatestComplaintButton = new JButton("Recent Complaints (Last 24 Hours)");
         viewLatestComplaintButton.setBackground(Color.RED);
         viewLatestComplaintButton.setForeground(Color.WHITE);
-
         viewLatestComplaintButton.setBounds(50, 100, 250, 30);
         add(viewLatestComplaintButton);
 
@@ -154,75 +158,78 @@ public class RequestPage extends JFrame {
         }
     }
 
-  private void viewLatestComplaints() {
-      int x=200;
-      int y=200;
-    JDialog recentComplaintsDialog = new JDialog(this, "Recent Complaints (Last 24 Hours)", true);
-    recentComplaintsDialog.setSize(200, 800); // Start with a small width
-    recentComplaintsDialog.setLocation(x,y);
-    recentComplaintsDialog.setLayout(new BorderLayout());
-   
+    private void viewLatestComplaints() {
+        int x = 200;
+        int y = 200;
+        JDialog recentComplaintsDialog = new JDialog(this, "Recent Complaints (Last 24 Hours)", true);
+        recentComplaintsDialog.setSize(200, 800); // Start with a small width
+        recentComplaintsDialog.setLocation(x, y);
+        recentComplaintsDialog.setLayout(new BorderLayout());
 
-  
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.DAY_OF_YEAR, -1);
+        Date yesterday = calendar.getTime();
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        String formattedDate = dateFormat.format(yesterday);
 
-    // Create the table
-    Calendar calendar = Calendar.getInstance();
-    calendar.add(Calendar.DAY_OF_YEAR, -1);
+        String query = "SELECT * FROM Complaints WHERE STR_TO_DATE(registration_datetime, '%Y-%m-%d %H:%i:%s') > STR_TO_DATE('" + formattedDate + "', '%Y-%m-%d %H:%i:%s')";
 
-    Date yesterday = calendar.getTime();
-    SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        try {
+            Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/login_erp", "root", "");
+            Statement st = con.createStatement();
+            ResultSet rs = st.executeQuery(query);
 
-    String formattedDate = dateFormat.format(yesterday);
+            DefaultTableModel latestComplaintModel = new DefaultTableModel();
+            ResultSetMetaData rsmd = rs.getMetaData();
+            int columnCount = rsmd.getColumnCount();
 
-    String query = "SELECT * FROM Complaints WHERE STR_TO_DATE(registration_datetime, '%Y-%m-%d %H:%i:%s') > STR_TO_DATE('" + formattedDate + "', '%Y-%m-%d %H:%i:%s')";
-
-    try {
-        Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/login_erp", "root", "");
-        Statement st = con.createStatement();
-        ResultSet rs = st.executeQuery(query);
-
-        DefaultTableModel latestComplaintModel = (DefaultTableModel) DbUtils.resultSetToTableModel(rs);
-        JTable latestComplaintTable = new JTable(latestComplaintModel);
-       
-        JLabel heading = new JLabel("Recent Complaints (Last 24 Hours)");
-        heading.setFont(new Font("serif", Font.BOLD, 22));
-        heading.setForeground(Color.BLUE);
-
-        // Add the table and heading to the dialog content
-        JPanel dialogContent = new JPanel(new BorderLayout());
-        dialogContent.add(heading, BorderLayout.NORTH);
-        dialogContent.add(new JScrollPane(latestComplaintTable), BorderLayout.CENTER);
-
-        recentComplaintsDialog.add(dialogContent, BorderLayout.CENTER);
-
-    } catch (Exception ex) {
-        ex.printStackTrace();
-    }
-
-   
-
-    // Add animation to the dialog
-    Timer dialogTimer = new Timer(20, new ActionListener() {
-        int width = 200;
-
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            if (width < 1000) {
-                width += 20;
-            } else {
-                width = 1000;
-                ((Timer) e.getSource()).stop(); // Stop the animation after reaching the desired width
+            // Set up table columns
+            for (int i = 1; i <= columnCount; i++) {
+                latestComplaintModel.addColumn(rsmd.getColumnName(i));
             }
-            recentComplaintsDialog.setSize(width, 600);
+
+            // Add rows from the result set
+            while (rs.next()) {
+                Object[] row = new Object[columnCount];
+                for (int i = 1; i <= columnCount; i++) {
+                    row[i - 1] = rs.getObject(i);
+                }
+                latestComplaintModel.addRow(row);
+            }
+
+            JTable latestComplaintTable = new JTable(latestComplaintModel);
+            JLabel heading = new JLabel("Recent Complaints (Last 24 Hours)");
+            heading.setFont(new Font("serif", Font.BOLD, 22));
+            heading.setForeground(Color.BLUE);
+
+            JPanel dialogContent = new JPanel(new BorderLayout());
+            dialogContent.add(heading, BorderLayout.NORTH);
+            dialogContent.add(new JScrollPane(latestComplaintTable), BorderLayout.CENTER);
+
+            recentComplaintsDialog.add(dialogContent, BorderLayout.CENTER);
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
-    });
 
-    dialogTimer.start();
+        Timer dialogTimer = new Timer(20, new ActionListener() {
+            int width = 200;
 
-    recentComplaintsDialog.setVisible(true);
-}
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (width < 1000) {
+                    width += 20;
+                } else {
+                    width = 1000;
+                    ((Timer) e.getSource()).stop();
+                }
+                recentComplaintsDialog.setSize(width, 600);
+            }
+        });
 
-
+        dialogTimer.start();
+        recentComplaintsDialog.setVisible(true);
+    }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
