@@ -4,11 +4,8 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
-import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.sql.*;
-import net.proteanit.sql.*;
-import org.apache.commons.dbutils.DbUtils;
 
 public class View extends JFrame {
     JTable table;
@@ -21,37 +18,12 @@ public class View extends JFrame {
         getContentPane().setBackground(new Color(230, 230, 250));
         setLayout(null);
         setBounds(0, 0, 1920, 1080);
-        setVisible(true);
 
         heading = new JLabel("Criminal Data Repository");
         heading.setBounds(300, -10, 800, 200);
-        heading.setFont(new Font("serif", Font.PLAIN, 60));
+        heading.setFont(new Font("Serif", Font.PLAIN, 60));
         heading.setForeground(Color.BLUE);
         add(heading);
-
-        // Add a shadow label
-        JLabel shadow = new JLabel("Criminal Data Repository");
-        shadow.setBounds(heading.getX() + 4, heading.getY() + 4, heading.getWidth(), heading.getHeight());
-        shadow.setFont(new Font("serif", Font.PLAIN, 60));
-        shadow.setForeground(Color.PINK);
-        add(shadow);
-
-        Timer headingTimer = new Timer(20, new ActionListener() {
-            int x = heading.getX();
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (x < 400) {
-                    x++;
-                } else {
-                    x = 350;
-                }
-                heading.setLocation(x, heading.getY());
-                shadow.setLocation(x + 4, shadow.getY());
-            }
-        });
-
-        headingTimer.start();
 
         JScrollPane scrollPane = new JScrollPane();
         scrollPane.setBounds(0, 150, 1920, 930);
@@ -59,44 +31,9 @@ public class View extends JFrame {
 
         model = new DefaultTableModel();
         table = new JTable(model);
-        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF); // Set auto-resize mode to OFF
-
-        try {
-            Class.forName("com.mysql.cj.jdbc.Driver");
-            Connection con = DriverManager.getConnection("jdbc:mysql://localhost:3306/login_erp", "root", ""); // Provide your correct username and password
-
-            Statement st = con.createStatement();
-            ResultSet rs = st.executeQuery("SELECT  * FROM adding");
-            model = (DefaultTableModel) DbUtils.resultSetToTableModel(rs);
-            table.setModel(model);
-
-            JTableHeader header = table.getTableHeader();
-            header.setDefaultRenderer(new CustomHeaderRenderer());
-
-            DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
-            centerRenderer.setHorizontalAlignment(JLabel.CENTER);
-            table.setDefaultRenderer(Object.class, centerRenderer); // Center align all cells
-
-            // Calculate the preferred width for each column based on your total table width
-            int totalWidth = 1920; // Total width of your JFrame
-            int columnCount = table.getColumnCount();
-            for (int i = 0; i < columnCount; i++) {
-                int columnWidth = totalWidth / columnCount; // Equal distribution of width
-                table.getColumnModel().getColumn(i).setPreferredWidth(columnWidth);
-            }
-
-            table.setRowHeight(30);
-            Color skyBlue = new Color(135, 206, 235);
-            for (int row = 0; row < table.getRowCount(); row += 2) {
-                table.addRowSelectionInterval(row, row);
-                table.setSelectionBackground(skyBlue);
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
 
         scrollPane.setViewportView(table);
+        loadTableData();
 
         searchField = new JTextField();
         searchField.setBounds(1100, 100, 200, 30);
@@ -104,7 +41,7 @@ public class View extends JFrame {
 
         JButton searchButton = new JButton("Search By Name");
         searchButton.setBounds(1310, 100, 180, 30);
-        searchButton.setBackground(Color.red);
+        searchButton.setBackground(Color.RED);
         searchButton.setForeground(Color.WHITE);
         add(searchButton);
 
@@ -116,7 +53,6 @@ public class View extends JFrame {
             if (searchTerm.length() == 0) {
                 sorter.setRowFilter(null);
             } else {
-                // Filter based on the first column (Name)
                 sorter.setRowFilter(RowFilter.regexFilter("(?i)" + searchTerm, 0));
             }
         });
@@ -129,23 +65,49 @@ public class View extends JFrame {
         add(backButton);
 
         backButton.addActionListener(e -> {
-            dispose(); // Close the current view
-            new AdminOptions(); // Open the AdminOptions page
+            dispose();
+            new AdminOptions();
         });
+
+        setVisible(true);
     }
 
-    class CustomHeaderRenderer extends DefaultTableCellRenderer {
-        public CustomHeaderRenderer() {
-            setHorizontalAlignment(JLabel.CENTER);
-            setFont(new Font("Brush Script MT", Font.BOLD, 22));
-            setBackground(Color.BLACK);
-            setForeground(Color.BLUE);
+    private void loadTableData() {
+        String url = "jdbc:mysql://localhost:3306/login_erp"; // Replace with your database URL
+        String user = "root"; // Replace with your database username
+        String password = ""; // Replace with your database password
+        String query = "SELECT * FROM adding"; // Replace with your table name
+
+        try (Connection con = DriverManager.getConnection(url, user, password);
+             Statement stmt = con.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+
+            ResultSetMetaData rsmd = rs.getMetaData();
+            int columnCount = rsmd.getColumnCount();
+
+            // Set up table columns
+            model.setRowCount(0); // Clear previous data
+            model.setColumnCount(0);
+            for (int i = 1; i <= columnCount; i++) {
+                model.addColumn(rsmd.getColumnName(i));
+            }
+
+            // Populate table rows
+            while (rs.next()) {
+                Object[] row = new Object[columnCount];
+                for (int i = 1; i <= columnCount; i++) {
+                    row[i - 1] = rs.getObject(i);
+                }
+                model.addRow(row);
+            }
+
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "Error loading data: " + e.getMessage(),
+                    "Database Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    public static void main(String args[]) {
-        SwingUtilities.invokeLater(() -> {
-            new View();
-        });
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(View::new);
     }
 }
